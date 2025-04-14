@@ -1,0 +1,170 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Narrative Dot Story</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: white; overflow-x: hidden; }
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+    }
+    .scroll-container {
+      position: relative;
+      z-index: 2;
+      width: 100vw;
+    }
+    section {
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 3em;
+      text-align: center;
+    }
+    .text-block {
+      background: rgba(255,255,255,0.85);
+      padding: 2em;
+      border-radius: 10px;
+      max-width: 600px;
+    }
+    .caption-box {
+      margin-top: 1em;
+      font-size: 1.2em;
+      font-style: italic;
+      color: #cc0000;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="dotCanvas" width="1600" height="900"></canvas>
+
+<div class="scroll-container">
+  <section data-frame="0"><div class="text-block"><h2>Thousands of Captions</h2><p>These are all 4,014 captions submitted to a single New Yorker contest.</p></div></section>
+  <section data-frame="1"><div class="text-block"><h2>The Voting</h2><p>Some received thousands of votes. Most, only a few.</p></div></section>
+  <section data-frame="2"><div class="text-block"><h2>A Standout</h2><p>But one caption stood out...</p></div></section>
+  <section data-frame="3"><div class="text-block"><h2>The Funniest Caption</h2><p>It had the highest average funniness score:</p><div class="caption-box">“Do you think death rays would be considered electronics or sporting goods?”</div></div></section>
+</div>
+
+<script src="https://unpkg.com/gsap@3/dist/gsap.min.js"></script>
+<script src="https://unpkg.com/gsap@3/dist/ScrollTrigger.min.js"></script>
+<script>
+gsap.registerPlugin(ScrollTrigger);
+
+const canvas = document.getElementById("dotCanvas");
+const ctx = canvas.getContext("2d");
+const width = canvas.width;
+const height = canvas.height;
+
+let dots = [];
+
+fetch("pre_grid_caption_frames.json")
+  .then(res => res.json())
+  .then(data => {
+    const maxVotes = Math.max(...data.map(d => d.x_votes));
+    const standout = data.find(d => d.highlight);
+
+    dots = data.map((d, i) => ({
+      id: d.id,
+      x: Math.random() * width,
+      y: Math.random() * height,
+      tx: Math.random() * width,
+      ty: Math.random() * height,
+      opacity: 0,
+      r: 2,
+      color: "black",
+      votes: d.x_votes,
+      highlight: d.highlight
+    }));
+
+    // Frame 0 – float in
+    function layout0() {
+      dots.forEach(dot => {
+        dot.tx = Math.random() * width;
+        dot.ty = Math.random() * height;
+        dot.opacity = 0.3;
+        dot.r = 2;
+        dot.color = dot.highlight ? "red" : "black";
+      });
+    }
+
+    // Frame 1 – vertical stacks based on vote tiers
+    function layout1() {
+      const tiers = 5;
+      dots.forEach(dot => {
+        const tier = Math.floor((dot.votes / maxVotes) * tiers);
+        dot.tx = width * 0.2 + Math.random() * width * 0.6;
+        dot.ty = height * 0.1 + (tier * height * 0.15) + Math.random() * 40;
+        dot.opacity = 0.6;
+        dot.r = 3;
+      });
+    }
+
+    // Frame 2 – highlight standout
+    function layout2() {
+      dots.forEach(dot => {
+        if (dot.highlight) {
+          dot.tx = width / 2;
+          dot.ty = height / 2;
+          dot.r = 12;
+          dot.opacity = 1;
+          dot.color = "#cc0000";
+        } else {
+          dot.opacity = 0.15;
+          dot.r = 2;
+        }
+      });
+    }
+
+    // Frame 3 – freeze frame 2
+    function layout3() {
+      layout2();
+    }
+
+    function updateLayout(f) {
+      if (f === 0) layout0();
+      else if (f === 1) layout1();
+      else if (f === 2) layout2();
+      else if (f === 3) layout3();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      dots.forEach(dot => {
+        dot.x += (dot.tx - dot.x) * 0.08;
+        dot.y += (dot.ty - dot.y) * 0.08;
+        dot.r += (dot.r_target ? dot.r_target - dot.r : 0) * 0.1;
+
+        ctx.beginPath();
+        ctx.globalAlpha = dot.opacity;
+        ctx.fillStyle = dot.color;
+        ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      });
+      requestAnimationFrame(draw);
+    }
+
+    // ScrollTriggers
+    document.querySelectorAll("section").forEach(sec => {
+      const f = parseInt(sec.dataset.frame);
+      ScrollTrigger.create({
+        trigger: sec,
+        start: "top center",
+        onEnter: () => updateLayout(f),
+        onEnterBack: () => updateLayout(f)
+      });
+    });
+
+    updateLayout(0);
+    draw();
+  });
+</script>
+
+</body>
+</html>
